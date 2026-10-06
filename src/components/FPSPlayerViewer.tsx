@@ -32,8 +32,8 @@ export const FPSPlayerViewer: React.FC = () => {
 
     // 1. Scene Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0c10);
-    scene.fog = new THREE.FogExp2(0x0a0c10, 0.006);
+    scene.background = new THREE.Color(0x0e1117);
+    scene.fog = new THREE.FogExp2(0x0e1117, 0.005);
 
     // 2. Camera Setup (First Person)
     const camera = new THREE.PerspectiveCamera(
@@ -53,17 +53,16 @@ export const FPSPlayerViewer: React.FC = () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.18;
+    renderer.toneMappingExposure = 1.2;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     container.appendChild(renderer.domElement);
 
-    // 4. Environment & Lighting Setup
+    // 4. Environment Lighting
     const envRenderTarget = createStudioEnvironmentMap(renderer);
     scene.environment = envRenderTarget.texture;
 
-    // Sun / Key Sky Light
     const sunLight = new THREE.DirectionalLight(0xfff5ea, 2.6);
     sunLight.position.set(40, 90, 60);
     sunLight.castShadow = true;
@@ -80,19 +79,17 @@ export const FPSPlayerViewer: React.FC = () => {
     sunLight.shadow.radius = 2.0;
     scene.add(sunLight);
 
-    // Sky Fill Light
     const skyFill = new THREE.DirectionalLight(0xa5c8ff, 1.4);
     skyFill.position.set(-50, 45, -60);
     scene.add(skyFill);
 
-    const ambientLight = new THREE.AmbientLight(0x242a36, 0.85);
+    const ambientLight = new THREE.AmbientLight(0x283040, 0.9);
     scene.add(ambientLight);
 
     // 5. Build Baseplate Proving Grounds & Shooting Dummies
     const { envGroup, targets } = buildBaseplateEnvironment();
     scene.add(envGroup);
 
-    // Flatten all target hit meshes for fast raycasting
     const targetMeshes: { mesh: THREE.Mesh; dummy: TargetDummy }[] = [];
     targets.forEach((dummy) => {
       dummy.hitMeshes.forEach((mesh) => {
@@ -100,22 +97,18 @@ export const FPSPlayerViewer: React.FC = () => {
       });
     });
 
-    // 6. Build First-Person Viewmodel Rig (Sniper + Tactical Arms)
+    // 6. Build Sleek Futuristic Viewmodel Rig
     const { viewmodel: viewmodelRig, boltAssembly } = buildFPSViewmodelRig();
     camera.add(viewmodelRig);
     scene.add(camera);
 
-    // ==========================================
-    // MUZZLE FLASH & PARTICLES
-    // ==========================================
-    // Muzzle Flash Light
-    const flashLight = new THREE.PointLight(0xffaa44, 0, 15);
+    // Muzzle Flash
+    const flashLight = new THREE.PointLight(0x38bdf8, 0, 15);
     flashLight.position.set(0.14, -0.15, -1.05);
     camera.add(flashLight);
 
-    // Muzzle Flash Visual Star
-    const flashGeo = new THREE.OctahedronGeometry(0.14, 0);
-    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 });
+    const flashGeo = new THREE.OctahedronGeometry(0.12, 0);
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0 });
     const flashMesh = new THREE.Mesh(flashGeo, flashMat);
     flashMesh.position.set(0.14, -0.14, -1.1);
     camera.add(flashMesh);
@@ -123,16 +116,15 @@ export const FPSPlayerViewer: React.FC = () => {
     // Particle Pools
     const hitParticles: HitParticle[] = [];
     const particleGeo = new THREE.SphereGeometry(0.04, 6, 6);
-    const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+    const sparkMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
     const dustMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8, transparent: true });
 
-    // Ejected Brass Casings
     const ejectedCasings: EjectedCasing[] = [];
     const casingGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.07, 10);
     const casingMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
 
     // ==========================================
-    // 7. FPS PLAYER MOVEMENT & PHYSICS STATE
+    // 7. FPS PLAYER & MOVEMENT STATE
     // ==========================================
     const STAND_EYE_HEIGHT = 1.72;
     const SLIDE_EYE_HEIGHT = 0.85;
@@ -151,11 +143,9 @@ export const FPSPlayerViewer: React.FC = () => {
       slideDirection: new THREE.Vector3(),
     };
 
-    // ADS (Aim Down Sights) State
     let isAiming = false;
-    let currentAds = 0; // 0 to 1
+    let currentAds = 0;
 
-    // Shooting & Bolt Action State
     let canShoot = true;
     let boltActionTimer = 0;
     let recoilIntensity = 0;
@@ -164,20 +154,16 @@ export const FPSPlayerViewer: React.FC = () => {
     let muzzleFlashLife = 0;
     let boltState: 'idle' | 'unlock' | 'pull' | 'push' | 'lock' = 'idle';
 
-    // Base Hipfire & ADS Viewmodel Offsets (scaled, natural FPS positioning)
     const hipfirePos = new THREE.Vector3(0, 0, 0);
     const hipfireRot = new THREE.Euler(0, 0, 0);
 
-    // ADS Viewmodel Center Alignment (places the optic bore directly in camera line-of-sight)
     const adsTargetPos = new THREE.Vector3(-0.14, 0.048, 0.12);
     const adsTargetRot = new THREE.Euler(0, 0, 0);
 
-    // Smooth Mouse Look
     let mouseDeltaX = 0;
     let mouseDeltaY = 0;
     const baseSensitivity = 0.0022;
 
-    // Keyboard state
     const keys = {
       forward: false,
       backward: false,
@@ -193,10 +179,8 @@ export const FPSPlayerViewer: React.FC = () => {
     const vmOffsetRot = new THREE.Euler();
     let landingDip = 0;
 
-    // Raycaster for hitscan shooting
     const raycaster = new THREE.Raycaster();
 
-    // Spawn sparks and dust at hit point
     const spawnHitImpact = (point: THREE.Vector3, normal: THREE.Vector3) => {
       for (let i = 0; i < 12; i++) {
         const pMesh = new THREE.Mesh(particleGeo, Math.random() > 0.4 ? sparkMat : dustMat);
@@ -219,16 +203,13 @@ export const FPSPlayerViewer: React.FC = () => {
       }
     };
 
-    // Eject Brass Casing from chamber
     const spawnEjectedCasing = () => {
       const casingMesh = new THREE.Mesh(casingGeo, casingMat);
-      // Spawn slightly to the right of camera
       const spawnPos = new THREE.Vector3(0.18, -0.12, -0.3).applyMatrix4(camera.matrixWorld);
       casingMesh.position.copy(spawnPos);
       casingMesh.castShadow = true;
       scene.add(casingMesh);
 
-      // Eject right and slightly back/up relative to camera
       const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
       const upDir = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
       const backDir = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
@@ -252,25 +233,20 @@ export const FPSPlayerViewer: React.FC = () => {
       });
     };
 
-    // Fire Weapon Function
     const fireWeapon = () => {
       if (!canShoot || boltState !== 'idle') return;
 
-      // 1. Trigger High-Caliber Sound
       soundEngine.playGunshot();
 
-      // 2. Recoil & Camera Kick
       recoilIntensity = 1.0;
-      cameraRecoilPitch = 0.055 + Math.random() * 0.015; // Visceral upward kick
+      cameraRecoilPitch = 0.055 + Math.random() * 0.015;
       cameraRecoilYaw = (Math.random() - 0.5) * 0.015;
 
-      // 3. Muzzle Flash
       muzzleFlashLife = 0.07;
       flashLight.intensity = 8.0;
       flashMat.opacity = 1.0;
       flashMesh.rotation.z = Math.random() * Math.PI;
 
-      // 4. Raycast Shooting Ballistics
       raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
       const hitCandidates = targetMeshes.map((t) => t.mesh);
       const intersects = raycaster.intersectObjects(hitCandidates, false);
@@ -279,11 +255,9 @@ export const FPSPlayerViewer: React.FC = () => {
         const hit = intersects[0];
         const match = targetMeshes.find((t) => t.mesh === hit.object);
         if (match) {
-          // Trigger Dummy Flinch
-          match.dummy.flinchVelocity = 12.5; // Strong spring recoil
+          match.dummy.flinchVelocity = 12.5;
           spawnHitImpact(hit.point, hit.face?.normal || new THREE.Vector3(0, 1, 0));
 
-          // Audio & Visual Hitmarker
           soundEngine.playHitmarker();
           setHitmarkerActive(true);
           setHitDistance(match.dummy.distance);
@@ -291,13 +265,11 @@ export const FPSPlayerViewer: React.FC = () => {
         }
       }
 
-      // 5. Start Bolt-Action Cycle
       canShoot = false;
-      boltActionTimer = 1.35; // 1.35s total cycle
+      boltActionTimer = 1.35;
       boltState = 'unlock';
     };
 
-    // Input Listeners
     const onMouseDown = (e: MouseEvent) => {
       if (document.pointerLockElement !== container) {
         container.requestPointerLock();
@@ -305,10 +277,8 @@ export const FPSPlayerViewer: React.FC = () => {
       }
 
       if (e.button === 0) {
-        // Left Click: Shoot
         fireWeapon();
       } else if (e.button === 2) {
-        // Right Click: Toggle/Hold ADS
         isAiming = !isAiming;
       }
     };
@@ -385,8 +355,7 @@ export const FPSPlayerViewer: React.FC = () => {
 
     const onMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== container) return;
-      // Precision mouse sensitivity scaling when scoped in
-      const scopedSensitivityMult = THREE.MathUtils.lerp(1.0, 0.28, currentAds);
+      const scopedSensitivityMult = THREE.MathUtils.lerp(1.0, 0.32, currentAds);
       mouseDeltaX += e.movementX * scopedSensitivityMult;
       mouseDeltaY += e.movementY * scopedSensitivityMult;
     };
@@ -416,7 +385,7 @@ export const FPSPlayerViewer: React.FC = () => {
     window.addEventListener('resize', onResize);
 
     // ==========================================
-    // 8. MAIN RENDER & PHYSICS LOOP
+    // 8. MAIN RENDER & PHYSICS TICK
     // ==========================================
     let animationFrameId: number;
     let lastTime = performance.now();
@@ -428,7 +397,7 @@ export const FPSPlayerViewer: React.FC = () => {
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
 
-      // 1. ADS Interpolation (Smooth 0 <-> 1 transition)
+      // 1. ADS Interpolation
       const adsSpeed = isAiming ? 8.5 : 9.5;
       currentAds = THREE.MathUtils.lerp(currentAds, isAiming ? 1.0 : 0.0, Math.min(1, adsSpeed * dt));
       setAdsProgress(currentAds);
@@ -437,13 +406,69 @@ export const FPSPlayerViewer: React.FC = () => {
       playerState.yaw -= mouseDeltaX * baseSensitivity;
       playerState.pitch -= mouseDeltaY * baseSensitivity;
 
-      // Apply and decay Camera Recoil Kick
+      // =======================================================
+      // SMOOTH MAGNETIC AIM ASSIST (Only active while scoped)
+      // =======================================================
+      if (currentAds > 0.3) {
+        let bestTarget: TargetDummy | null = null;
+        let minScreenDist = 0.32; // Aim assist cone radius in NDC
+
+        const cameraForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+
+        targets.forEach((dummy) => {
+          // Target center point (chest height)
+          const targetWorldPos = new THREE.Vector3();
+          dummy.group.getWorldPosition(targetWorldPos);
+          targetWorldPos.y += 1.45; // Center chest/head height
+
+          const toTarget = targetWorldPos.clone().sub(camera.position);
+          const distForward = toTarget.dot(cameraForward);
+
+          if (distForward > 1.0) {
+            // Project into screen space (-1 to 1)
+            const ndc = targetWorldPos.clone().project(camera);
+            const screenDist = Math.hypot(ndc.x, ndc.y);
+
+            if (screenDist < minScreenDist) {
+              minScreenDist = screenDist;
+              bestTarget = dummy;
+            }
+          }
+        });
+
+        if (bestTarget) {
+          const targetWorldPos = new THREE.Vector3();
+          (bestTarget as TargetDummy).group.getWorldPosition(targetWorldPos);
+          targetWorldPos.y += 1.45;
+
+          const toTarget = targetWorldPos.clone().sub(camera.position);
+          const desiredYaw = Math.atan2(-toTarget.x, -toTarget.z);
+          const horizDist = Math.hypot(toTarget.x, toTarget.z);
+          const desiredPitch = Math.atan2(toTarget.y, horizDist);
+
+          // Wrap angle difference to [-PI, PI]
+          let yawDiff = desiredYaw - playerState.yaw;
+          while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+          while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+
+          const pitchDiff = desiredPitch - playerState.pitch;
+
+          // Smooth magnetic pull strength (gentle assistance, not a hard snap)
+          const assistProximityFactor = Math.max(0, 1.0 - minScreenDist / 0.32);
+          const pullSpeed = 4.2 * dt * currentAds * assistProximityFactor;
+
+          playerState.yaw += yawDiff * THREE.MathUtils.clamp(pullSpeed, 0, 0.35);
+          playerState.pitch += pitchDiff * THREE.MathUtils.clamp(pullSpeed, 0, 0.35);
+        }
+      }
+
+      // Camera Recoil Recovery
       playerState.pitch += cameraRecoilPitch;
       playerState.yaw += cameraRecoilYaw;
       cameraRecoilPitch *= Math.exp(-18 * dt);
       cameraRecoilYaw *= Math.exp(-18 * dt);
 
-      // Clamped Pitch (-85 deg to +85 deg)
+      // Clamped Pitch (-85 to +85 deg)
       const maxPitch = Math.PI / 2 - 0.05;
       playerState.pitch = Math.max(-maxPitch, Math.min(maxPitch, playerState.pitch));
 
@@ -469,11 +494,9 @@ export const FPSPlayerViewer: React.FC = () => {
         .addScaledVector(forwardVec, -moveDir.z)
         .addScaledVector(rightVec, moveDir.x);
 
-      // Sprinting (disabled while aiming down sight)
       const isMovingForward = keys.forward && !keys.backward;
       playerState.isSprinting = keys.shift && isMovingForward && playerState.isGrounded && !playerState.isSliding && !isAiming;
 
-      // Slide Trigger
       if (keys.slide && (playerState.isSprinting || playerState.isSliding || desiredWorldDir.lengthSq() > 0) && playerState.isGrounded && !isAiming) {
         if (!playerState.isSliding) {
           playerState.isSliding = true;
@@ -500,7 +523,6 @@ export const FPSPlayerViewer: React.FC = () => {
 
       playerState.currentEyeHeight += (playerState.targetEyeHeight - playerState.currentEyeHeight) * Math.min(1, 14 * dt);
 
-      // Ground Speed & Friction
       if (!playerState.isSliding && playerState.isGrounded) {
         let maxSpeed = isAiming ? 3.0 : playerState.isSprinting ? 10.5 : isMovingInput ? 5.8 : 0;
         const targetVelX = desiredWorldDir.x * maxSpeed;
@@ -515,7 +537,6 @@ export const FPSPlayerViewer: React.FC = () => {
         playerState.velocity.z += desiredWorldDir.z * airControl * dt;
       }
 
-      // Jump & Gravity
       const GRAVITY = -24.0;
       const JUMP_FORCE = 8.5;
 
@@ -530,7 +551,6 @@ export const FPSPlayerViewer: React.FC = () => {
       playerState.position.z += playerState.velocity.z * dt;
       playerState.position.y += playerState.velocity.y * dt;
 
-      // Ground Floor Collision
       const floorY = playerState.currentEyeHeight;
       if (playerState.position.y <= floorY) {
         if (!playerState.isGrounded && playerState.velocity.y < -3.0) {
@@ -545,20 +565,17 @@ export const FPSPlayerViewer: React.FC = () => {
 
       camera.position.copy(playerState.position);
 
-      // Sun shadow following
       sunLight.position.set(playerState.position.x + 40, 90, playerState.position.z + 60);
       sunLight.target.position.set(playerState.position.x, 0, playerState.position.z);
       sunLight.target.updateMatrixWorld();
 
-      // Dynamic Optical Zoom FOV (75 deg base down to 18 deg high-power scope magnification)
+      // Dynamic FOV (75 base down to 22 scoped magnification)
       const baseFOV = playerState.isSliding ? 84 : playerState.isSprinting ? 82 : 75;
-      const targetFOV = THREE.MathUtils.lerp(baseFOV, 18, currentAds);
+      const targetFOV = THREE.MathUtils.lerp(baseFOV, 22, currentAds);
       camera.fov += (targetFOV - camera.fov) * Math.min(1, 14 * dt);
       camera.updateProjectionMatrix();
 
-      // ==========================================
-      // 4. BOLT ACTION SEQUENCING & RECOIL RECOVERY
-      // ==========================================
+      // 4. Bolt Action & Recoil
       if (muzzleFlashLife > 0) {
         muzzleFlashLife -= dt;
         if (muzzleFlashLife <= 0) {
@@ -569,16 +586,13 @@ export const FPSPlayerViewer: React.FC = () => {
 
       recoilIntensity *= Math.exp(-12 * dt);
 
-      // Bolt Action State Machine
       if (boltActionTimer > 0) {
         boltActionTimer -= dt;
-        const cycleProgress = 1.0 - boltActionTimer / 1.35; // 0 to 1
+        const cycleProgress = 1.0 - boltActionTimer / 1.35;
 
         if (cycleProgress < 0.25) {
-          // Recoil settling phase
           boltState = 'idle';
         } else if (cycleProgress < 0.42) {
-          // Unlock & Lift Bolt Handle
           if (boltState !== 'unlock') {
             boltState = 'unlock';
             soundEngine.playBoltUnlock();
@@ -588,7 +602,6 @@ export const FPSPlayerViewer: React.FC = () => {
             boltAssembly.rotation.x = THREE.MathUtils.lerp(0, -Math.PI * 0.35, tLift);
           }
         } else if (cycleProgress < 0.65) {
-          // Pull Bolt Backwards & Eject Casing
           if (boltState !== 'pull') {
             boltState = 'pull';
             soundEngine.playBoltSlideBack();
@@ -599,7 +612,6 @@ export const FPSPlayerViewer: React.FC = () => {
             boltAssembly.position.z = THREE.MathUtils.lerp(0, -0.65, tPull);
           }
         } else if (cycleProgress < 0.85) {
-          // Push Bolt Forward
           if (boltState !== 'push') {
             boltState = 'push';
             soundEngine.playBoltSlideForward();
@@ -609,7 +621,6 @@ export const FPSPlayerViewer: React.FC = () => {
             boltAssembly.position.z = THREE.MathUtils.lerp(-0.65, 0, tPush);
           }
         } else if (cycleProgress < 1.0) {
-          // Lock Bolt Handle Down
           if (boltState !== 'lock') {
             boltState = 'lock';
             soundEngine.playBoltLock();
@@ -630,9 +641,7 @@ export const FPSPlayerViewer: React.FC = () => {
         }
       }
 
-      // ==========================================
-      // 5. VIEWMODEL KINEMATICS & ADS BLEND
-      // ==========================================
+      // 5. Viewmodel Dynamics
       const horizSpeed = Math.hypot(playerState.velocity.x, playerState.velocity.z);
       const isMoving = horizSpeed > 0.5 && playerState.isGrounded;
       const bobFreq = playerState.isSprinting ? 12.5 : isMoving ? 8.5 : 2.0;
@@ -641,16 +650,13 @@ export const FPSPlayerViewer: React.FC = () => {
       const targetVmPos = new THREE.Vector3();
       const targetVmRot = new THREE.Euler();
 
-      // Blend between Hipfire and ADS Base Poses
       targetVmPos.lerpVectors(hipfirePos, adsTargetPos, currentAds);
       targetVmRot.x = THREE.MathUtils.lerp(hipfireRot.x, adsTargetRot.x, currentAds);
       targetVmRot.y = THREE.MathUtils.lerp(hipfireRot.y, adsTargetRot.y, currentAds);
       targetVmRot.z = THREE.MathUtils.lerp(hipfireRot.z, adsTargetRot.z, currentAds);
 
-      // Dampen sway and bobbing when aiming down sights
       const adsSwayDamping = THREE.MathUtils.lerp(1.0, 0.12, currentAds);
 
-      // Mouse Sway
       targetVmPos.x -= mouseDeltaX * 0.0003 * adsSwayDamping;
       targetVmPos.y += mouseDeltaY * 0.0003 * adsSwayDamping;
       targetVmRot.y -= mouseDeltaX * 0.0005 * adsSwayDamping;
@@ -660,7 +666,6 @@ export const FPSPlayerViewer: React.FC = () => {
       mouseDeltaX *= Math.exp(-20 * dt);
       mouseDeltaY *= Math.exp(-20 * dt);
 
-      // Locomotion Bobbing
       if (playerState.isGrounded) {
         if (isMoving) {
           const bobAmp = (playerState.isSprinting ? 0.015 : 0.008) * adsSwayDamping;
@@ -674,11 +679,9 @@ export const FPSPlayerViewer: React.FC = () => {
         }
       }
 
-      // Landing Dip
       landingDip *= Math.exp(-12 * dt);
       targetVmPos.y -= landingDip * adsSwayDamping;
 
-      // Sprint & Slide Poses (only apply in hipfire)
       if (playerState.isSprinting && currentAds < 0.1) {
         targetVmPos.x += 0.03;
         targetVmPos.y -= 0.05;
@@ -695,12 +698,10 @@ export const FPSPlayerViewer: React.FC = () => {
         targetVmRot.z += 0.2;
       }
 
-      // Gunshot Recoil Kick Impulse (Viewmodel snaps backward & tilts up)
       targetVmPos.z += recoilIntensity * 0.08;
       targetVmPos.y += recoilIntensity * 0.03;
       targetVmRot.x += recoilIntensity * 0.14;
 
-      // Smooth Viewmodel Position/Rotation Integration
       const vmInterpSpeed = isAiming ? 18.0 : 15.0;
       vmOffsetPos.lerp(targetVmPos, Math.min(1, vmInterpSpeed * dt));
       vmOffsetRot.x += (targetVmRot.x - vmOffsetRot.x) * Math.min(1, vmInterpSpeed * dt);
@@ -710,14 +711,11 @@ export const FPSPlayerViewer: React.FC = () => {
       viewmodelRig.position.copy(vmOffsetPos);
       viewmodelRig.rotation.set(vmOffsetRot.x, vmOffsetRot.y, vmOffsetRot.z);
 
-      // ==========================================
-      // 6. TARGET DUMMIES SPRING REACTION PHYSICS
-      // ==========================================
+      // 6. Target Dummies Spring Physics
       targets.forEach((dummy) => {
         if (Math.abs(dummy.flinchVelocity) > 0.001 || Math.abs(dummy.flinchAngle) > 0.001) {
-          // Spring damper equation: F = -k*x - c*v
-          const kSpring = 65.0; // Spring stiffness
-          const cDamper = 7.5; // Damping
+          const kSpring = 65.0;
+          const cDamper = 7.5;
           const springForce = -kSpring * dummy.flinchAngle - cDamper * dummy.flinchVelocity;
 
           dummy.flinchVelocity += springForce * dt;
@@ -727,10 +725,7 @@ export const FPSPlayerViewer: React.FC = () => {
         }
       });
 
-      // ==========================================
-      // 7. PARTICLES & EJECTED BRASS CASING PHYSICS
-      // ==========================================
-      // Spark/Dust Particles
+      // 7. Particles & Casings
       for (let i = hitParticles.length - 1; i >= 0; i--) {
         const p = hitParticles[i];
         p.life += dt;
@@ -740,13 +735,12 @@ export const FPSPlayerViewer: React.FC = () => {
           continue;
         }
 
-        p.velocity.y += -18.0 * dt; // Gravity
+        p.velocity.y += -18.0 * dt;
         p.mesh.position.addScaledVector(p.velocity, dt);
         const scaleProgress = 1.0 - p.life / p.maxLife;
         p.mesh.scale.setScalar(scaleProgress);
       }
 
-      // Brass Casings
       for (let i = ejectedCasings.length - 1; i >= 0; i--) {
         const c = ejectedCasings[i];
         c.life += dt;
@@ -762,7 +756,6 @@ export const FPSPlayerViewer: React.FC = () => {
         c.mesh.rotation.y += c.rotVelocity.y * dt;
         c.mesh.rotation.z += c.rotVelocity.z * dt;
 
-        // Ground collision bounce
         if (c.mesh.position.y <= 0.03) {
           c.mesh.position.y = 0.03;
           c.velocity.y = -c.velocity.y * 0.35;
@@ -801,16 +794,15 @@ export const FPSPlayerViewer: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className="relative w-screen h-screen overflow-hidden select-none touch-none bg-[#0a0c10] cursor-crosshair"
+      className="relative w-screen h-screen overflow-hidden select-none touch-none bg-[#0e1117] cursor-crosshair"
     >
-      {/* Scope Reticle & Lens Aperture Overlay during ADS */}
+      {/* Clean Roblox FPS-Style Precision Scope Overlay */}
       <ScopeOverlay adsProgress={adsProgress} />
 
       {/* Dynamic Hitmarker Crosshair Feedback */}
       {hitmarkerActive && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
           <div className="relative w-8 h-8 flex items-center justify-center animate-ping duration-150">
-            {/* Tactical 4-Bar Hitmarker Indicator */}
             <div className="absolute w-2.5 h-[2px] bg-red-500 transform -rotate-45 translate-x-2 -translate-y-2 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
             <div className="absolute w-2.5 h-[2px] bg-red-500 transform rotate-45 -translate-x-2 -translate-y-2 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
             <div className="absolute w-2.5 h-[2px] bg-red-500 transform rotate-45 translate-x-2 translate-y-2 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
