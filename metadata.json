@@ -1,0 +1,7 @@
+{
+  "name": "3D Hyperrealistic Sniper Rifle",
+  "description": "A fully 3D hyperrealistic precision sniper rifle with free 360-degree rotation and smooth responsive dragging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
